@@ -11,4 +11,5 @@ class TransferArc(Base):
  target:Mapped[str]=mapped_column(String(60))
  capacity:Mapped[int]=mapped_column(Integer)
  travel_minutes:Mapped[float]=mapped_column(Double)
+ revision:Mapped[int]=mapped_column(Integer,default=0,server_default="0")
  created_at:Mapped[str]=mapped_column(String(64))

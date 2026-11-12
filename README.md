@@ -30,11 +30,24 @@ SEED_DEMO=true初次建表并幂等填充固定ID/自然键，不重复新增、
 
 ## 六实体与页面
 
-NetworkDataset保存节点和来源；TransferArc单独持久化每条ID/端点/非负整数容量/非负时长，唯一键为(dataset_id,arc_id)，允许端点重复或反向；OutageScenario在建立时冻结全部边快照，记录源汇与停用ID；NetworkRun经Redis独立worker计算并保存证据；ResilienceReview保存人工判断；Report仅在最新意见accepted后由admin归档，run唯一。
+NetworkDataset保存节点和来源；TransferArc单独持久化每条ID/端点/非负整数容量/非负时长/修订号，唯一键为(dataset_id,arc_id)，允许端点重复或反向；LedgerBatch记录每次运营补发批次的写入/忽略/拒绝明细与幂等批次号；OutageScenario在建立时冻结全部边快照，记录源汇与停用ID；NetworkRun经Redis独立worker计算并保存证据；ResilienceReview保存人工判断；Report仅在最新意见accepted后由admin归档，run唯一。
 
 六业务页：韧性总览、网络与节点、容量与时长、停用方案、流量与绕行、韧性复核（含操作留痕）。平行/反向边曲线错开，逐边台账和残量表保留完整ID；近竖直平行/反向标签向两侧外置，避免中点重叠。图中最大流视图与独立最短路径视图分开，基线/停用两组数值明确；手机图在局部横向容器滚动，页面本身不横溢。
 
 新增边不会改变旧推演；如需纳入比较，必须新建方案冻结新快照，保证前后比较来自同一份容量和时长。
+
+### 运营补发：按批次更新已有网络
+
+运营每天补发同一网络的边台账，`POST /ledger/batches` 按批次更新已有网络，不再只能新建网络。每条记录携带边ID与修订号`revision`，服务端三遍处理：先逐条格式校验并按边ID归集，再在同批内按修订号归并（乱序到达时最高修订胜出、同批重复或旧修订记为忽略），最后与台账当前修订号比较。规则：
+
+- 旧修订不覆盖新值：记录修订号低于台账当前修订号则忽略；相等且取值一致忽略，相等但取值冲突拒绝该记录，更高修订号才覆盖。
+- 平行边、反向边凭各自边ID独立保留，按`(dataset_id,arc_id)`更新，绝不按端点合并。
+- 任一坏记录（未知端点、重复ID冲突、分数/负容量、非有限时长、非法修订号等）使整批不生效：批次记为`rejected`且台账零写入，拒绝原因逐条留痕。
+- 批次号`batch_key`是幂等键：重复投递同一批次只生效一次，原样返回首次结果（`redelivered=true`）；同批次号但内容不一致返回409。
+- 推演仍使用创建时冻结的快照，批次更新不改写任何旧方案/旧证据；更新后新建的推演才使用新台账。
+- `GET /ledger/datasets/{id}/batches`与`GET /ledger/batches/{id}`可查每批写入、忽略、拒绝条数与逐条原因，容量与时长页面提供批次明细。
+
+`TransferArc`新增`revision`（旧数据默认修订0），`LedgerBatch`保存批次状态、校验和与逐条明细，唯一键`(dataset_id,batch_key)`；见`migrations/002-ledger-batches.sql`，旧库由启动时`ensure_schema()`幂等补列。
 
 ## 两个算法与证据
 
@@ -75,6 +88,6 @@ frontend/src含api/stores/types/components/common/hooks/pages/router/utils/const
 
 ## 适用边界
 
-静态容量网络只量化模拟上界与单次停边影响，没有时间展开、排队、发运批次或动态调度。最短路与最大流分配分别计算，不是联合优化。JSON表单导入，无CSV解析器。单worker启动恢复queued/running，无分布式租约；初次SQLAlchemy建表，无生产迁移回滚。Google Fonts加载Noto Sans SC/Noto Serif SC，失败时字体回退。开发密钥和演示账号供本地模拟。
+静态容量网络只量化模拟上界与单次停边影响，没有时间展开、排队、发运批次或动态调度。最短路与最大流分配分别计算，不是联合优化。网络与批次均为JSON表单导入，无CSV解析器。单worker启动恢复queued/running，无分布式租约；初次SQLAlchemy建表，无生产迁移回滚。Google Fonts加载Noto Sans SC/Noto Serif SC，失败时字体回退。开发密钥和演示账号供本地模拟。
 
 MIT License。

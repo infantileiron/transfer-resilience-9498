@@ -1,8 +1,11 @@
 export interface User{email:string;role:string}
 export interface Node{node_id:string;label:string;x:number;y:number}
 export interface ArcShape{arc_id:string;source:string;target:string;capacity:number;travel_minutes:number}
-export interface Arc extends ArcShape{id:string;dataset_id:string;created_at:string}
+export interface Arc extends ArcShape{id:string;dataset_id:string;revision:number;created_at:string}
 export interface Dataset{id:string;name:string;source:string;nodes:Node[];created_at:string}
+export interface LedgerPlanned{arc_id:string;source:string;target:string;capacity:number;travel_minutes:number;revision:number}
+export interface LedgerRecordResult{index:number;arc_id:string|null;revision:number|null;decision:'written'|'ignored'|'rejected';reason:string;planned?:LedgerPlanned}
+export interface LedgerBatch{id:string;dataset_id:string;batch_key:string;status:'applied'|'rejected';payload_checksum:string;total_records:number;written_count:number;ignored_count:number;rejected_count:number;detail:LedgerRecordResult[];submitted_by:string;created_at:string;redelivered?:boolean}
 export interface Scenario{id:string;name:string;dataset_id:string;source_node:string;sink_node:string;disabled_arc_ids:string[];arc_snapshot:ArcShape[];created_at:string}
 export interface ArcFlow extends ArcShape{effective_capacity:number;flow:number;residual_forward:number;residual_reverse:number;disabled:boolean}
 export interface Conservation{node_id:string;inflow:number;outflow:number;balance:number;expected_balance:number;conserved:boolean}
